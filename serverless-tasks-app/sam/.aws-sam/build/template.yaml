@@ -1,0 +1,71 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  TasksApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: TasksApi
+      StageName: Prod
+      Auth:
+        DefaultAuthorizer: MyLambdaTokenAuthorizer
+        Authorizers:
+          MyLambdaTokenAuthorizer:
+            FunctionArn:
+              Fn::GetAtt:
+              - MyLambdaTokenAuthorizer
+              - Arn
+            Identity:
+              Header: Authorization
+  CreateTaskFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      CodeUri: CreateTaskFunction
+      Handler: app.lambda_handler
+      Policies:
+      - DynamoDBCrudPolicy:
+          TableName:
+            Ref: TasksTable
+      Environment:
+        Variables:
+          TASKS_TABLE:
+            Ref: TasksTable
+      Events:
+        PostTaskFunctionApi:
+          Type: Api
+          Properties:
+            RestApiId:
+              Ref: TasksApi
+            Path: /tasks
+            Method: POST
+            Auth:
+              Authorizer: MyLambdaTokenAuthorizer
+    Metadata:
+      SamResourceId: CreateTaskFunction
+  MyLambdaTokenAuthorizer:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.11
+      CodeUri: MyLambdaTokenAuthorizer
+      Handler: app.authorizer_handler
+      Policies:
+      - AWSLambdaBasicExecutionRole
+      Environment:
+        Variables:
+          AUTHORIZER_KEY: some-key
+    Metadata:
+      SamResourceId: MyLambdaTokenAuthorizer
+  TasksTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: user
+        AttributeType: S
+      - AttributeName: id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: user
+        KeyType: HASH
+      - AttributeName: id
+        KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
